@@ -9,8 +9,8 @@ def initialize_parameters(layer_dims):
     L = len(layer_dims)#the number of layers in the network
     parameters = {}
     for l in range(1,L):
-        parameters["W" + str(l)] = torch.randn(layer_dims[l],layer_dims[l-1])*0.1
-        parameters["b" + str(l)] = torch.zeros((layer_dims[l],1))
+        parameters["W" + str(l)] = (torch.randn(layer_dims[l],layer_dims[l-1])*0.1).to('cuda')
+        parameters["b" + str(l)] = torch.zeros((layer_dims[l],1)).to('cuda')
     return parameters
 
 def linear_forward(x, w, b):
@@ -35,7 +35,7 @@ def relu_forward(Z):
     # """
 	row = Z.size(0)
 	col = Z.size(1)
-	A = torch.maximum(Z,torch.zeros(row,col))
+	A = torch.maximum(Z,torch.zeros(row,col).to('cuda'))
 	return A
 
 def sigmoid(Z):
@@ -72,8 +72,7 @@ def forward_propagation(X, parameters):
 	bL = parameters["b" + str(L)]
 	zL = linear_forward(A, WL, bL)
 	caches.append((A, WL, bL, zL))
-	AL = sigmoid(zL)
-	return AL, caches
+	return zL, caches
 
 #calculate cost function
 def compute_cost(AL,Y):
@@ -85,6 +84,7 @@ def compute_cost(AL,Y):
 	m = Y.shape[1]
 	cost = 1. / m * torch.nansum(torch.mul(-torch.log(AL), Y) +
 	                          torch.mul(-torch.log(1 - AL), 1 - Y))
+	cost = torch.sum(torch.square(AL-Y)) / m
 	#从数组的形状中删除单维条目，即把shape中为1的维度去掉，比如把[[[2]]]变成2
 	cost = torch.squeeze(cost)
 	return cost
@@ -131,7 +131,7 @@ def backward_propagation(AL, Y, caches):
 	m = Y.shape[1]
 	L = len(caches) - 1
 	#calculate the Lth layer gradients
-	dz = 1. / m * (AL - Y)
+	dz = 2. * (AL - Y) / m
 	da, dWL, dbL = linear_backward(dz, caches[L])
 	gradients = {"dW" + str(L + 1): dWL, "db" + str(L + 1): dbL}
 
@@ -156,13 +156,13 @@ def update_parameters(parameters, grads, learning_rate):
 	:param learning_rate: alpha
 	:return:
 	"""
-	L = len(parameters) 
+	L = len(parameters) // 2
 	for l in range(L):
 		parameters["W" + str(l + 1)] = parameters["W" + str(l + 1)] - learning_rate * grads["dW" + str(l+1)]
 		parameters["b" + str(l + 1)] = parameters["b" + str(l + 1)] - learning_rate * grads["db" + str(l+1)]
 	return parameters
 
-def L_layer_model(X, Y, layer_dims, learning_rate, num_iterations):
+def L_layer_model(X, Y, X_test, Y_test, layer_dims, learning_rate, num_iterations):
 	"""
 	:param X:
 	:param Y:
@@ -211,6 +211,6 @@ def predict(X_test,y_test,parameters):
 
 #DNN model
 def DNN(X_train, y_train, X_test, y_test, layer_dims, learning_rate= 0.001, num_iterations=30000):
-	parameters = L_layer_model(X_train, y_train, layer_dims, learning_rate, num_iterations)
+	parameters = L_layer_model(X_train, y_train, X_test, y_test,layer_dims, learning_rate, num_iterations)
 	accuracy = predict(X_test,y_test,parameters)
 	return accuracy
